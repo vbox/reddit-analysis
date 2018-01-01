@@ -2,6 +2,7 @@
     This is the Reddit Analysis project.
 
     Copyright 2016 Randal S. Olson.
+    Copyright 2018 kvs, kvs@inbox.ru
 
     This program is free software: you can redistribute it and/or modify it under
     the terms of the GNU General Public License as published by the Free Software
@@ -28,7 +29,7 @@ from optparse import OptionParser
 from requests.exceptions import HTTPError
 from update_checker import update_check
 
-__version__ = "1.0.5"
+__version__ = "1.1.0"
 
 PACKAGE_DIR = os.path.dirname(__file__)
 
@@ -69,6 +70,18 @@ def parse_cmd_line():
                       help=("period to count words over:"
                             " day/week/month/year/all"
                             " [default: month]"))
+
+    parser.add_option("-c", "--clientid",
+                      action="store",
+                      type="string",
+                      dest="clientid",
+                      help=("Client_id for your script"))
+    
+    parser.add_option("-s", "--secret",
+                      action="store",
+                      type="string",
+                      dest="secret",
+                      help=("Client secret for your script"))
 
     parser.add_option("-l", "--limit",
                       action="store",
@@ -253,8 +266,11 @@ def process_submission(submission, count_word_freqs, max_threshold, include_comm
 
     """
     if include_comments:  # parse all the comments for the submission
-        submission.replace_more_comments()
-        for comment in praw.helpers.flatten_tree(submission.comments):
+        submission.comments.replace_more()
+        comment_queue = submission.comments[:]
+        #for comment in praw.helpers.flatten_tree(submission.comments):
+        while comment_queue:
+            comment = comment_queue.pop(0)
             parse_text(text=comment.body, count_word_freqs=count_word_freqs,
                        max_threshold=max_threshold)
 
@@ -289,7 +305,7 @@ def process_subreddit(subreddit, period, limit, count_word_freqs, max_threshold)
 
     # determine period to count the words over
     params = {"t": period}
-    for submission in with_status(iterable=subreddit.get_top(limit=limit, params=params)):
+    for submission in with_status(iterable=subreddit.top(limit=limit, params=params)):
         try:
             process_submission(submission=submission,
                                count_word_freqs=count_word_freqs,
@@ -319,6 +335,8 @@ def main():
         handler = MultiprocessHandler()
 
     reddit = praw.Reddit(
+        client_id=options.clientid,
+        client_secret=options.secret,
         user_agent="/u/{0} reddit analyzer".format(user), handler=handler)
 
     reddit.config.decode_html_entities = True
@@ -330,7 +348,7 @@ def main():
     target = target[3:]
 
     if options.is_subreddit:
-        process_subreddit(subreddit=reddit.get_subreddit(target),
+        process_subreddit(subreddit=reddit.subreddit(target),
                           period=options.period, limit=options.limit,
                           count_word_freqs=options.count_word_freqs,
                           max_threshold=options.max_threshold)
